@@ -1,0 +1,40 @@
+# Build is manually triggered. 
+trigger:
+- none
+
+# Using an Azure DevOps Microsoft-Hosted Linux Agent.
+pool: bicep-hackaton
+
+# Standard Variables.
+variables:
+  env: demo
+  deployedBy: [FILL IN HERE]
+  serviceConnection: devops-bicephackaton-spn
+  azSubId: b3df4070-f1b7-44c5-8d1b-52f0e5590c74
+  azTenantId: cb05d17b-90dd-49f6-a513-7c45f5343852
+  azLoc: westeurope
+  prefix: [FILL IN HERE]
+
+# Network variables
+  aksVnetRgName: hack-network-rg
+  aksVnetName: hack-vnet
+  aksSubnet: [FILL IN HERE]
+
+stages:
+
+# Deploy Azure Resources.
+- stage: deploy_azure_resources
+  displayName: Deploy Azure Resources
+
+  jobs:
+
+  # Deploy Resource Groups.
+  - template: /templates/resources/deploy-resource-groups.yaml
+    parameters:
+      env: $(env)
+      deployedBy: $(deployedBy)
+      serviceConnection: $(serviceConnection)
+      azLoc: $(azLoc)
+      rgNames: [
+        "hack-network-rg"
+        ]
