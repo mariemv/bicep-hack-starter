@@ -1,0 +1,55 @@
+# Deployment of Azure AKS Cluster
+jobs:
+  - job: deploy_aks
+#    dependsOn: deploy_vnet
+    displayName: 'Deploy AKS'
+    steps:
+    
+    # Deploy AKS Cluster.
+    - task: AzureCLI@2
+      enabled: true
+      displayName: 'Deploy AKS [${{ parameters.aksClusterName }}] to [${{ parameters.aksRgName }}]'
+      inputs:
+        azureSubscription: "${{ parameters.serviceConnection }}"
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        'inlineScript': |
+
+           if [[ $(az aks list --query [].name --output tsv) == "${{ parameters.aksClusterName }}"  ]]; then
+               echo "K8s Cluster ["${{ parameters.aksClusterName }}"] has already been deployed."
+           else
+               echo "Could not find K8s Cluster ["${{ parameters.aksClusterName }}"]."
+
+               ssh-keygen -t rsa -b 2048 -C "${{ parameters.aksClusterName }}" -f ./"${{ parameters.aksClusterName }}" -N ''
+
+               aksClusterSshPrivateKey=$(cat ${{ parameters.aksClusterName }})
+               aksClusterSshPublicKey=$(cat ${{ parameters.aksClusterName }}.pub)
+
+               echo "Deploying K8s Cluster [${{ parameters.aksClusterName }}]. This may take up to 15 minutes."
+
+               az deployment group create \
+               --name "deploy-${{ parameters.aksClusterName }}-$RANDOM" \
+               --resource-group "${{ parameters.aksRgName }}" \
+               --template-file "templates/bicep/customAks.bicep" \
+               --parameters \
+                 aksClusterName="${{ parameters.aksClusterName }}" \
+                 aksClusterDnsPrefix="${{ parameters.aksClusterName }}" \
+                 aksSubnetId="${{ parameters.aksSubnetId }}" \
+                 aksClusterAdminUsername="${{ parameters.aksClusterAdminUsername }}" \
+                 aksClusterSshPublicKey="$aksClusterSshPublicKey" \
+                 nodePoolCount="${{ parameters.nodePoolCount }}" \
+                 nodePoolMaxCount="${{ parameters.nodePoolMaxCount }}" \
+                 nodePoolMinCount="${{ parameters.nodePoolMinCount }}" \
+                 nodeResourceGroupName="${{ parameters.nodeResourceGroupName }}" \
+                 nodePoolEnableAutoScaling="${{ parameters.nodePoolEnableAutoScaling }}" \
+                 aadEnabled="${{ parameters.aadEnabled }}" \
+                 aksClusterEnablePrivateCluster="${{ parameters.aksClusterEnablePrivateCluster }}" \
+                 aadProfileManaged="${{ parameters.aadProfileManaged }}" \
+                 aadProfileEnableAzureRBAC="${{ parameters.aadProfileEnableAzureRBAC }}" \
+                 azLoc="${{ parameters.azLoc }}" \
+                 aksTagName="${{ parameters.aksClusterName }}" \
+                 aksTagEnvName="${{ parameters.env }}" \
+                 aksTagDeployedBy="${{ parameters.deployedBy }}" \
+               --output none && \
+               echo "Deployed K8s Cluster [${{ parameters.aksClusterName }}] successfully."
+           fi
