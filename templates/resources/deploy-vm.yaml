@@ -1,0 +1,69 @@
+# Deployment of Azure VM
+jobs:
+  - job: deploy_vm
+    dependsOn: deploy_kv
+    displayName: 'Deploy VM'
+    steps:
+
+    # Deploy VM
+    - task: AzureCLI@2
+      displayName: 'Deploy VM [${{ parameters.vmName }}] to [${{ parameters.vmRgName }}]'
+      inputs:
+        azureSubscription: "${{ parameters.serviceConnection }}"
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        'inlineScript': |
+
+          if [[ $(az vm list --resource-group ${{ parameters.vmRgName }} --query "[].name" --output tsv) == "${{ parameters.vmName }}"  ]]; then
+               echo "Virtual Machine ["${{ parameters.vmName }}"] has already been deployed."
+          else
+               echo "Could not find Virtual Machine ["${{ parameters.vmName }}"]."
+           
+               nicName=$(echo "${{ parameters.vmRgName }}" | sed 's/-rg/-nic/g')
+               vmName=${{ parameters.vmName }}
+               nsgName=$(echo "${{ parameters.vmRgName }}" | sed 's/-rg/-nsg/g')
+               sshRule=$(echo "${{ parameters.vmRgName }}" | sed 's/-rg/-ssh/g')
+               kvName=${{ parameters.vmKvName }}
+    
+               ssh-keygen -t rsa -b 2048 -C "'$vmName'" -f "$vmName" -N ''
+               adminPublicKey=$(cat "$vmName".pub) 
+               adminPrivateKey=$(cat "$vmName")
+               rm -rf "${vmName}*"
+               
+              
+               ADD_PUB_KEY_TO_KV=$(az keyvault secret set \
+               --name "$vmName"-pub \
+               --vault-name "$kvName" \
+               --value "$adminPublicKey")
+    
+               ADD_PRIKEY_TO_KV=$(az keyvault secret set \
+               --name "$vmName"-pri \
+               --vault-name "$kvName" \
+               --value "$adminPrivateKey")
+    
+               az deployment group create \
+               --name "deploy-${{ parameters.vmName }}-$RANDOM" \
+               --resource-group "${{ parameters.vmRgName }}" \
+               --template-file "templates/bicep/linuxVm.bicep" \
+               --parameters \
+                 nicName="$nicName" \
+                 azLoc="${{ parameters.azLoc }}" \
+                 subnetId="${{ parameters.aksSubnetId }}" \
+                 vmName="$vmName" \
+                 vmSize="${{ parameters.vmSize }}" \
+                 imagePublisher="${{ parameters.imagePublisher }}" \
+                 imageOffer="${{ parameters.imageOffer }}" \
+                 imageSku="${{ parameters.imageSku }}" \
+                 imageVersion="${{ parameters.imageVersion }}" \
+                 adminUsername="${{ parameters.adminUsername }}" \
+                 vmDiskSize="${{ parameters.vmDiskSize }}" \
+                 nicTagName="$nicName" \
+                 nicTagEnvName="${{ parameters.env }}" \
+                 nicTagDeployedBy="${{ parameters.deployedBy }}" \
+                 vmTagName="$storageAccountName" \
+                 vmTagEnvName="${{ parameters.env }}" \
+                 vmTagDeployedBy="${{ parameters.deployedBy }}" \
+                 sshRule="$sshRule" \
+                 adminPublicKey="$adminPublicKey" \
+                 nsgName="$nsgName"
+          fi

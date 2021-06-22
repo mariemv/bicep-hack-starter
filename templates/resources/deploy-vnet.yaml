@@ -1,0 +1,32 @@
+# Deployment of Azure VNets
+jobs:
+  - job: deploy_vnet
+    dependsOn: deploy_resource_groups
+    displayName: 'Deploy VNET'
+    steps:
+
+    # Deploy Vnet
+    - task: AzureCLI@2
+      enabled: true
+      displayName: 'Deploy AKS VNet to [${{ parameters.aksVnetRgName }}]'
+      inputs:
+        azureSubscription: "${{ parameters.serviceConnection }}"
+        scriptType: 'bash'
+        scriptLocation: 'inlineScript'
+        'inlineScript': |
+
+           az deployment group create \
+           --name "deploy-${{ parameters.vnetName }}-$RANDOM" \
+           --resource-group "${{ parameters.aksVnetRgName }}" \
+           --template-file "templates/bicep/aksVnet.bicep" \
+           --parameters \
+             vnetName="${{ parameters.vnetName }}" \
+             vnetaddressPrefix="${{ parameters.vnetaddressPrefix }}" \
+             subnetaddressPrefix="${{ parameters.subnetaddressPrefix }}" \
+             subnetName="${{ parameters.subnetName }}" \
+             azLoc="${{ parameters.azLoc }}" \
+             vnetTagName="${{ parameters.vnetName }}" \
+             vnetTagEnvName="${{ parameters.env }}" \
+             vnetTagDeployedBy="${{ parameters.deployedBy }}" \
+           --output none && \
+           echo "Deployed [${{ parameters.vnetName }}] successfully." 
